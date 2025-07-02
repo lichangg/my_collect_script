@@ -126,3 +126,38 @@ Object.defineProperty(obj.headers, 'Anti-Content', {
 })();
 
 
+// 通过blob创建的js由于js文件名随机导致断点打不上，此处hook blob创建js并固定文件名
+(function () {
+  const OriginalBlob = Blob;
+
+  // 覆盖 window.Blob 构造函数
+  window.Blob = function (content, options) {
+    try {
+      if (Array.isArray(content) && typeof content[0] === 'string') {
+        let code = content[0];
+        if (!code.includes('sourceURL')) {
+          code += '\n//# sourceURL=hooked_blob.js';
+          content[0] = code;
+        }
+        console.log('%c[Blob Hook]', 'color: green;', code);
+      }
+    } catch (e) {
+      console.warn('[Blob Hook Error]', e);
+    }
+    return new OriginalBlob(content, options);
+  };
+
+  window.Blob.prototype = OriginalBlob.prototype;
+  window.Blob.toString = () => 'function Blob() { [native code] }';
+
+  // Hook Reflect.construct(Blob, ...)
+  const originalReflectConstruct = Reflect.construct;
+  Reflect.construct = function (target, args, newTarget) {
+    if (target === OriginalBlob && Array.isArray(args)) {
+      console.log('%c[Reflect.construct -> Blob]', 'color: blue;', args);
+      return new window.Blob(args[0], args[1]);
+    }
+    return originalReflectConstruct(target, args, newTarget);
+  };
+})();
+
